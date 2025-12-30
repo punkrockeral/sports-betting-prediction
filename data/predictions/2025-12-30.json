@@ -1,17 +1,5 @@
 {
+  "generated_at": "2025-12-30T21:32:15.351899Z",
   "date": "2025-12-30",
-  "predictions": [
-    {
-      "home": "Team A",
-      "away": "Team B",
-      "pred": "HOME",
-      "ev": 0.12
-    },
-    {
-      "home": "Team C",
-      "away": "Team D",
-      "pred": "DRAW",
-      "ev": 0.08
-    }
-  ]
+  "predictions": []
 }
