@@ -28,7 +28,7 @@ jobs:
 
       - name: Run real prediction script
         env:
-        FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}  # ← Indentado con 2 espacios bajo "env:"
         run: python scripts/fetch_and_predict.py
 
       - name: Commit and push predictions (if changed)
@@ -38,7 +38,6 @@ jobs:
           git add data/predictions/
           if ! git diff --staged --quiet; then
             git commit -m "Auto: Predicciones del $(date -u +%Y-%m-%d)"
-            # Reescribir el remoto para incluir el token de autenticación
             git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/punkrockeral/sports-betting-prediction.git
             git push
             echo "✅ Predicciones actualizadas y subidas."
