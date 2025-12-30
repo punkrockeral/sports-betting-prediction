@@ -1,0 +1,13 @@
+# Configuración del sistema
+sports:
+  - soccer_epl
+  - soccer_spain_la_liga
+  - basketball_nba
+
+thresholds:
+  min_ev: 0.1
+  max_odds: 10.0
+
+apis:
+  football_data_enabled: true
+  odds_api_enabled: true
