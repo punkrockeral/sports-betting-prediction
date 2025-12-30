@@ -1,6 +1,18 @@
-streamlit==1.39.0
-pandas==2.2.0
-numpy==1.26.4
-scikit-learn==1.5.0
-xgboost==2.0.3
-requests==2.31.0
+# Core
+pandas
+numpy
+scikit-learn
+xgboost
+requests
+python-dateutil
+
+# Modelos
+tensorflow          # o pytorch si prefieres
+joblib
+
+# Dashboard
+streamlit
+
+# Opcional: análisis de cuotas
+matplotlib
+seaborn
