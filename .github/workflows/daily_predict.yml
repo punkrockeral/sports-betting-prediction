@@ -1,12 +1,12 @@
-name: Daily Prediction
+name: Daily Auto-Retrain & Predict
 
 on:
   schedule:
-    - cron: '0 6 * * *'
+    - cron: '0 5 * * *'  # 5 AM UTC (11 AM Nepal)
   workflow_dispatch:
 
 jobs:
-  predict:
+  auto_retrain:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -19,19 +19,23 @@ jobs:
       
       - run: pip install -r requirements.txt
 
-      # ✅ PASO NUEVO: Descargar datos históricos (funciona en GitHub Actions)
+      # 🔁 PASO 1: Descargar datos históricos
       - name: Download historical data
         run: python scripts/download_historical_data.py
 
-      # Preparar features con datos reales
+      # 🔁 PASO 2: Combinar datos
+      - name: Combine historical data
+        run: python scripts/combine_historical_data.py
+
+      # 🔁 PASO 3: Preparar features
       - name: Prepare features
         run: python prepare_dataset.py
 
-      # Entrenar modelo con datos reales
-      - name: Train model
+      # 🔁 PASO 4: Reentrenar modelo
+      - name: Retrain model
         run: python train_xgboost.py
 
-      # Predecir con datos del día
+      # 🔮 PASO 5: Generar predicciones
       - name: Run prediction
         env:
           ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
@@ -39,14 +43,14 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scripts/fetch_and_predict.py
 
-      # Guardar predicciones
-      - name: Commit predictions
+      # 💾 Guardar resultados
+      - name: Commit predictions and model
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/predictions/
+          git add data/predictions/ models/xgb_model.pkl
           if ! git diff --staged --quiet; then
-            git commit -m "Auto: Predicciones del $(date -u +%Y-%m-%d)"
+            git commit -m "Auto: Modelo reentrenado + predicciones del $(date -u +%Y-%m-%d)"
             git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/punkrockeral/sports-betting-prediction.git
             git push
           fi

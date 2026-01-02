@@ -80,6 +80,7 @@ def send_telegram_alert(predictions):
         message += f"  → {p['predicted_outcome']} @{p['home_odds']:.2f} (EV: {ev_pct:.1f}%)\n\n"
     
     try:
+        # ✅ URL CORREGIDA: sin espacios
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         requests.post(url, json={
             "chat_id": chat_id,
@@ -97,13 +98,25 @@ def get_real_matches(historical_df):
         print("⚠️  ODDS_API_KEY no configurada. Usando datos simulados.")
         return simulate_matches()
     
-    sports = ["soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga"]
+    # ✅ Ampliación: más ligas
+    sports = [
+        "soccer_epl",
+        "soccer_spain_la_liga",
+        "soccer_germany_bundesliga",
+        "soccer_italy_serie_a",
+        "soccer_france_ligue_one",
+        "soccer_netherlands_eredivisie",
+        "soccer_portugal_primeira_liga",
+        "soccer_england_championship"
+    ]
+    
     all_matches = []
     today = datetime.now(timezone.utc).date()
     now = datetime.now(timezone.utc)
     
     for sport in sports:
         try:
+            # ✅ URL CORREGIDA: sin espacios
             url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds"
             params = {
                 "apiKey": api_key,
@@ -119,22 +132,17 @@ def get_real_matches(historical_df):
                 continue
             
             odds_data = resp.json()
-            for match in odds_:
+            # ✅ Corrección: odds_data, no odds_
+            for match in odds_
                 try:
-                    # ✅ Parsear fecha del partido
                     match_time = datetime.fromisoformat(match["commence_time"].replace("Z", "+00:00"))
                     
-                    # ✅ FILTRO CLAVE: Ignorar partidos que ya comenzaron o son muy lejanos
+                    # Filtrar partidos futuros (hoy y mañana)
                     if match_time <= now:
-                        continue  # Ya comenzó o terminó
-                    if match_time > now + timedelta(hours=24):
-                        continue  # Más allá de 24h
-                    
-                    # Solo procesar si es hoy
-                    if match_time.date() != today:
+                        continue
+                    if match_time.date() not in [today, today + timedelta(days=1)]:
                         continue
                     
-                    # Extraer cuotas
                     home_odds = away_odds = draw_odds = None
                     for bookmaker in match.get("bookmakers", []):
                         if bookmaker["key"] in ["pinnacle", "bet365"]:
@@ -177,7 +185,7 @@ def get_real_matches(historical_df):
             print(f"⚠️  Error al procesar {sport}: {e}")
     
     if not all_matches:
-        print("ℹ️  No hay partidos válidos para hoy. Usando datos simulados.")
+        print("ℹ️  No hay partidos válidos. Usando datos simulados.")
         return simulate_matches()
     
     return all_matches
@@ -233,7 +241,6 @@ def calculate_ev(probability, odds):
 def main():
     print("🎯 Iniciando sistema de predicción diaria...")
     
-    # Cargar datos históricos
     historical_path = "data/processed/football_matches_with_odds.csv"
     if not os.path.exists(historical_path):
         print(f"❌ Advertencia: {historical_path} no encontrado. Usando stats por defecto.")
@@ -292,7 +299,6 @@ def main():
         
         print(f"  → {match['home_team']} vs {match['away_team']}: {best_outcome} (EV: {best_ev:.2%})")
     
-    # Guardar resultados
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     os.makedirs("data/predictions", exist_ok=True)
     output_path = f"data/predictions/{today}.json"
