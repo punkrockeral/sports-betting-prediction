@@ -2,8 +2,8 @@
 """
 Sistema de predicción diaria con:
 - Datos reales de The Odds API
-- Modelo XGBoost entrenado
-- Cálculo de valor esperado (EV)
+- Modelo XGBoost entrenado SOLO con estadísticas históricas (sin cuotas)
+- Cálculo de valor esperado (EV) usando cuotas reales
 - Alertas por Telegram (opcional)
 """
 
@@ -22,14 +22,14 @@ def load_model():
     return joblib.load(model_path)
 
 def send_telegram_alert(predictions):
-    """Envía alertas para apuestas con EV > 10%."""
+    """Envía alertas para apuestas con EV > 5%."""
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     
     if not bot_token or not chat_id:
         return
     
-    high_ev = [p for p in predictions if p.get("expected_value", 0) > 0.10]
+    high_ev = [p for p in predictions if p.get("expected_value", 0) > 0.05]
     if not high_ev:
         return
     
@@ -40,7 +40,6 @@ def send_telegram_alert(predictions):
         message += f"  → {p['predicted_outcome']} @{p['home_odds']:.2f} (EV: {ev_pct:.1f}%)\n\n"
     
     try:
-        # ✅ URL CORREGIDA: sin espacios
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         requests.post(url, json={
             "chat_id": chat_id,
@@ -58,14 +57,12 @@ def get_real_matches():
         print("⚠️  ODDS_API_KEY no configurada. Usando datos simulados.")
         return simulate_matches()
     
-    # Ligas a monitorear
     sports = ["soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga"]
     all_matches = []
     today = datetime.now(timezone.utc).date()
     
     for sport in sports:
         try:
-            # ✅ URL CORREGIDA: sin espacios
             url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds"
             params = {
                 "apiKey": api_key,
@@ -83,12 +80,10 @@ def get_real_matches():
             odds_data = resp.json()
             for match in odds_data:
                 try:
-                    # Verificar que el partido es HOY
                     match_time = datetime.fromisoformat(match["commence_time"].replace("Z", "+00:00"))
                     if match_time.date() != today:
                         continue
                     
-                    # Extraer cuotas de Pinnacle o Bet365
                     home_odds = away_odds = draw_odds = None
                     for bookmaker in match.get("bookmakers", []):
                         if bookmaker["key"] in ["pinnacle", "bet365"]:
@@ -106,6 +101,7 @@ def get_real_matches():
                                 break
                     
                     if home_odds and away_odds and draw_odds:
+                        # ✅ Features HISTÓRICAS (placeholder - en producción, usar historial real)
                         all_matches.append({
                             "match_id": match["id"],
                             "home_team": match["home_team"],
@@ -114,7 +110,7 @@ def get_real_matches():
                             "home_odds": float(home_odds),
                             "draw_odds": float(draw_odds),
                             "away_odds": float(away_odds),
-                            # Features placeholder (en producción, calcularías con historial real)
+                            # 🔑 Estas son las ÚNICAS features que usa el modelo
                             "home_goals_avg": 1.4,
                             "home_conceded_avg": 1.1,
                             "home_win_rate": 0.5,
@@ -136,43 +132,30 @@ def get_real_matches():
 
 def simulate_matches():
     """Genera datos simulados como respaldo."""
-    teams = [
-        "Manchester United", "Liverpool", "Chelsea", "Arsenal", "Manchester City",
-        "Tottenham", "Leicester", "West Ham", "Everton", "Aston Villa"
-    ]
+    teams = ["Team A", "Team B", "Team C", "Team D"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    matches = []
-    
-    for i in range(2):
-        home = np.random.choice(teams)
-        away = np.random.choice([t for t in teams if t != home])
-        home_odds = round(np.random.uniform(1.8, 3.0), 2)
-        draw_odds = round(np.random.uniform(3.2, 4.0), 2)
-        away_odds = round(np.random.uniform(2.5, 4.5), 2)
-        
-        matches.append({
-            "match_id": f"sim_{i+1}",
-            "home_team": home,
-            "away_team": away,
-            "match_date": f"{today}T19:00:00Z",
-            "home_odds": home_odds,
-            "draw_odds": draw_odds,
-            "away_odds": away_odds,
-            "home_goals_avg": 1.4,
-            "home_conceded_avg": 1.1,
-            "home_win_rate": 0.6,
-            "away_goals_avg": 1.1,
-            "away_conceded_avg": 1.3,
-            "away_win_rate": 0.4
-        })
-    return matches
+    return [{
+        "match_id": "sim_1",
+        "home_team": "Team A",
+        "away_team": "Team B",
+        "match_date": f"{today}T19:00:00Z",
+        "home_odds": 2.10,
+        "draw_odds": 3.40,
+        "away_odds": 3.20,
+        "home_goals_avg": 1.4,
+        "home_conceded_avg": 1.1,
+        "home_win_rate": 0.6,
+        "away_goals_avg": 1.1,
+        "away_conceded_avg": 1.3,
+        "away_win_rate": 0.4
+    }]
 
 def predict_match(model, match_features):
-    """Predice probabilidades usando el modelo XGBoost."""
+    """
+    Predice probabilidades usando el modelo XGBoost.
+    🔑 SOLO usa las 6 features históricas (sin cuotas).
+    """
     X = np.array([[
-        match_features['home_odds'],
-        match_features['draw_odds'],
-        match_features['away_odds'],
         match_features['home_goals_avg'],
         match_features['home_conceded_avg'],
         match_features['home_win_rate'],
@@ -188,6 +171,11 @@ def predict_match(model, match_features):
         probabilities = [0, 0, 0]
         probabilities[pred] = 1.0
     
+    # Asegurar que suma 1.0
+    total = sum(probabilities)
+    if total > 0:
+        probabilities = [p / total for p in probabilities]
+    
     return probabilities
 
 def calculate_ev(probability, odds):
@@ -197,20 +185,16 @@ def calculate_ev(probability, odds):
 def main():
     print("🎯 Iniciando sistema de predicción diaria...")
     
-    # Cargar modelo
     model = load_model()
     print("✅ Modelo cargado correctamente.")
     
-    # Obtener partidos (reales o simulados)
     matches = get_real_matches()
     print(f"📅 Encontrados {len(matches)} partidos para hoy.")
     
     predictions = []
     for match in matches:
-        features = {
-            'home_odds': match['home_odds'],
-            'draw_odds': match['draw_odds'],
-            'away_odds': match['away_odds'],
+        # ✅ Extraer solo las 6 features históricas para el modelo
+        features_for_model = {
             'home_goals_avg': match['home_goals_avg'],
             'home_conceded_avg': match['home_conceded_avg'],
             'home_win_rate': match['home_win_rate'],
@@ -219,21 +203,18 @@ def main():
             'away_win_rate': match['away_win_rate']
         }
         
-        # Predecir
-        probs = predict_match(model, features)
+        probs = predict_match(model, features_for_model)
         prob_home, prob_draw, prob_away = probs
         
-        # Calcular EV
+        # ✅ Usar cuotas reales SOLO para calcular EV
         ev_home = calculate_ev(prob_home, match['home_odds'])
         ev_draw = calculate_ev(prob_draw, match['draw_odds'])
         ev_away = calculate_ev(prob_away, match['away_odds'])
         
-        # Seleccionar mejor apuesta
         evs = {'HOME': ev_home, 'DRAW': ev_draw, 'AWAY': ev_away}
         best_outcome = max(evs, key=evs.get)
         best_ev = evs[best_outcome]
         
-        # Convertir a tipos serializables
         predictions.append({
             "match_id": match["match_id"],
             "home_team": match["home_team"],
@@ -277,7 +258,6 @@ def main():
     high_ev_count = sum(1 for p in predictions if p['expected_value'] > 0)
     print(f"💡 Apuestas con EV > 0: {high_ev_count} de {len(predictions)}")
     
-    # Enviar alertas por Telegram
     send_telegram_alert(predictions)
 
 if __name__ == "__main__":
