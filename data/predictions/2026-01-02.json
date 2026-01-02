@@ -1,21 +1,21 @@
 {
-  "generated_at": "2026-01-02T21:23:08.273093Z",
+  "generated_at": "2026-01-02T21:45:10.543852Z",
   "date": "2026-01-02",
   "model_used": "xgb_model.pkl",
   "predictions": [
     {
-      "match_id": "c1cef082530d156e4cdd5584f8cc5f15",
-      "home_team": "Rayo Vallecano",
-      "away_team": "Getafe",
-      "match_date": "2026-01-02T20:01:00Z",
-      "home_odds": 1.27,
-      "draw_odds": 4.53,
-      "away_odds": 17.94,
+      "match_id": "sim_1",
+      "home_team": "Team A",
+      "away_team": "Team B",
+      "match_date": "2026-01-02T19:00:00Z",
+      "home_odds": 2.1,
+      "draw_odds": 3.4,
+      "away_odds": 3.2,
       "predicted_outcome": "AWAY",
-      "expected_value": 6.8420000076293945,
-      "prob_home": 0.4000000059604645,
-      "prob_draw": 0.16200000047683716,
-      "prob_away": 0.43700000643730164
+      "expected_value": 0.9430000185966492,
+      "prob_home": 0.33799999952316284,
+      "prob_draw": 0.054999999701976776,
+      "prob_away": 0.6069999933242798
     }
   ]
 }
