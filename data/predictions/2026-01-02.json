@@ -1,5 +1,49 @@
 {
-  "generated_at": "2026-01-02T06:40:15.328856Z",
+  "generated_at": "2026-01-02T17:28:38.384371Z",
   "date": "2026-01-02",
-  "predictions": []
+  "model_used": "xgb_model.pkl",
+  "predictions": [
+    {
+      "match_id": "match_1",
+      "home_team": "Manchester United",
+      "away_team": "West Ham",
+      "match_date": "2026-01-02T19:00:00Z",
+      "home_odds": 2.3,
+      "draw_odds": 3.65,
+      "away_odds": 4.04,
+      "predicted_outcome": "HOME",
+      "expected_value": 1.2970000505447388,
+      "prob_home": 0.9990000128746033,
+      "prob_draw": 0.0010000000474974513,
+      "prob_away": 0.0010000000474974513
+    },
+    {
+      "match_id": "match_2",
+      "home_team": "Manchester United",
+      "away_team": "West Ham",
+      "match_date": "2026-01-02T19:00:00Z",
+      "home_odds": 2.05,
+      "draw_odds": 3.69,
+      "away_odds": 2.8,
+      "predicted_outcome": "HOME",
+      "expected_value": 1.0429999828338623,
+      "prob_home": 0.9959999918937683,
+      "prob_draw": 0.0020000000949949026,
+      "prob_away": 0.0020000000949949026
+    },
+    {
+      "match_id": "match_3",
+      "home_team": "Tottenham",
+      "away_team": "Arsenal",
+      "match_date": "2026-01-02T19:00:00Z",
+      "home_odds": 2.14,
+      "draw_odds": 3.96,
+      "away_odds": 2.8,
+      "predicted_outcome": "HOME",
+      "expected_value": 1.1330000162124634,
+      "prob_home": 0.996999979019165,
+      "prob_draw": 0.0020000000949949026,
+      "prob_away": 0.0020000000949949026
+    }
+  ]
 }
