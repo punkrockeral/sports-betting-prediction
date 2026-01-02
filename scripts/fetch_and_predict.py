@@ -10,10 +10,9 @@ Sistema de predicción diaria con:
 import os
 import json
 import numpy as np
-import pandas as pd
 import joblib
 import requests
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 def load_model():
     """Carga el modelo XGBoost entrenado."""
@@ -41,6 +40,7 @@ def send_telegram_alert(predictions):
         message += f"  → {p['predicted_outcome']} @{p['home_odds']:.2f} (EV: {ev_pct:.1f}%)\n\n"
     
     try:
+        # ✅ URL CORREGIDA: sin espacios
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         requests.post(url, json={
             "chat_id": chat_id,
@@ -65,6 +65,7 @@ def get_real_matches():
     
     for sport in sports:
         try:
+            # ✅ URL CORREGIDA: sin espacios
             url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds"
             params = {
                 "apiKey": api_key,
@@ -75,48 +76,57 @@ def get_real_matches():
             }
             resp = requests.get(url, params=params, timeout=10)
             
-            if resp.status_code == 200:
-                odds_data = resp.json()
-                for match in odds_data:
+            if resp.status_code != 200:
+                print(f"⚠️  Error HTTP {resp.status_code} al obtener {sport}")
+                continue
+            
+            odds_data = resp.json()
+            for match in odds_data:
+                try:
                     # Verificar que el partido es HOY
                     match_time = datetime.fromisoformat(match["commence_time"].replace("Z", "+00:00"))
-                    if match_time.date() == today:
-                        # Extraer cuotas de Pinnacle (prioridad)
-                        home_odds = away_odds = draw_odds = None
-                        for bookmaker in match.get("bookmakers", []):
-                            if bookmaker["key"] in ["pinnacle", "bet365"]:
-                                for market in bookmaker["markets"]:
-                                    if market["key"] == "h2h":
-                                        for outcome in market["outcomes"]:
-                                            if outcome["name"] == match["home_team"]:
-                                                home_odds = outcome["price"]
-                                            elif outcome["name"] == match["away_team"]:
-                                                away_odds = outcome["price"]
-                                            elif outcome["name"] == "Draw":
-                                                draw_odds = outcome["price"]
-                                        break
-                                if home_odds and away_odds and draw_odds:
+                    if match_time.date() != today:
+                        continue
+                    
+                    # Extraer cuotas de Pinnacle o Bet365
+                    home_odds = away_odds = draw_odds = None
+                    for bookmaker in match.get("bookmakers", []):
+                        if bookmaker["key"] in ["pinnacle", "bet365"]:
+                            for market in bookmaker.get("markets", []):
+                                if market["key"] == "h2h":
+                                    for outcome in market["outcomes"]:
+                                        if outcome["name"] == match["home_team"]:
+                                            home_odds = outcome["price"]
+                                        elif outcome["name"] == match["away_team"]:
+                                            away_odds = outcome["price"]
+                                        elif outcome["name"] == "Draw":
+                                            draw_odds = outcome["price"]
                                     break
-                        
-                        if home_odds and away_odds and draw_odds:
-                            all_matches.append({
-                                "match_id": match["id"],
-                                "home_team": match["home_team"],
-                                "away_team": match["away_team"],
-                                "match_date": match["commence_time"],
-                                "home_odds": float(home_odds),
-                                "draw_odds": float(draw_odds),
-                                "away_odds": float(away_odds),
-                                # Features placeholder (en producción, calcularías con datos históricos)
-                                "home_goals_avg": 1.4,
-                                "home_conceded_avg": 1.1,
-                                "home_win_rate": 0.5,
-                                "away_goals_avg": 1.1,
-                                "away_conceded_avg": 1.3,
-                                "away_win_rate": 0.4
-                            })
+                            if home_odds and away_odds and draw_odds:
+                                break
+                    
+                    if home_odds and away_odds and draw_odds:
+                        all_matches.append({
+                            "match_id": match["id"],
+                            "home_team": match["home_team"],
+                            "away_team": match["away_team"],
+                            "match_date": match["commence_time"],
+                            "home_odds": float(home_odds),
+                            "draw_odds": float(draw_odds),
+                            "away_odds": float(away_odds),
+                            # Features placeholder (en producción, calcularías con historial real)
+                            "home_goals_avg": 1.4,
+                            "home_conceded_avg": 1.1,
+                            "home_win_rate": 0.5,
+                            "away_goals_avg": 1.1,
+                            "away_conceded_avg": 1.3,
+                            "away_win_rate": 0.4
+                        })
+                except KeyError as e:
+                    print(f"⚠️  Dato faltante en partido: {e}")
+                    continue
         except Exception as e:
-            print(f"⚠️  Error al obtener {sport}: {e}")
+            print(f"⚠️  Error al procesar {sport}: {e}")
     
     if not all_matches:
         print("ℹ️  No hay partidos hoy en las APIs. Usando datos simulados.")
