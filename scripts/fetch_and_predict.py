@@ -69,7 +69,7 @@ def send_telegram_alert(predictions):
     if not bot_token or not chat_id:
         return
     
-    high_ev = [p for p in predictions if p.get("expected_value", 0) > 0.05]
+    high_ev = [p for p in predictions if p.get("expected_value", 0) > 0.02]
     if not high_ev:
         return
     
