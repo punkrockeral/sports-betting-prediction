@@ -119,7 +119,7 @@ def get_real_matches(historical_df):
                 continue
             
             odds_data = resp.json()
-            for match in odds_
+            for match in odds_:
                 try:
                     # ✅ Parsear fecha del partido
                     match_time = datetime.fromisoformat(match["commence_time"].replace("Z", "+00:00"))
