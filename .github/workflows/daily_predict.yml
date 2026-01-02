@@ -19,14 +19,27 @@ jobs:
       
       - run: pip install -r requirements.txt
 
+      # ✅ PASO NUEVO: Descargar datos históricos (funciona en GitHub Actions)
+      - name: Download historical data
+        run: python scripts/download_historical_data.py
+
+      # Preparar features con datos reales
+      - name: Prepare features
+        run: python prepare_dataset.py
+
+      # Entrenar modelo con datos reales
+      - name: Train model
+        run: python train_xgboost.py
+
+      # Predecir con datos del día
       - name: Run prediction
         env:
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}  # 🔑 ¡Esta línea es clave!
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python scripts/fetch_and_predict.py
+        run: python scripts/fetch_and_predict.py
 
+      # Guardar predicciones
       - name: Commit predictions
         run: |
           git config --global user.name "github-actions[bot]"
