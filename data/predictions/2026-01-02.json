@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-01-02T20:45:46.284446Z",
+  "generated_at": "2026-01-02T20:59:29.745894Z",
   "date": "2026-01-02",
   "model_used": "xgb_model.pkl",
   "predictions": [
@@ -12,10 +12,10 @@
       "draw_odds": 2.27,
       "away_odds": 4.54,
       "predicted_outcome": "AWAY",
-      "expected_value": 2.2079999446868896,
-      "prob_home": 0.21699999272823334,
-      "prob_draw": 0.07699999958276749,
-      "prob_away": 0.7070000171661377
+      "expected_value": 0.9850000143051147,
+      "prob_home": 0.4000000059604645,
+      "prob_draw": 0.16200000047683716,
+      "prob_away": 0.43700000643730164
     }
   ]
 }
