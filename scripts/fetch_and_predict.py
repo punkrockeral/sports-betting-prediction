@@ -133,7 +133,7 @@ def get_real_matches(historical_df):
             
             odds_data = resp.json()
             # ✅ Corrección: odds_data, no odds_
-            for match in odds_
+            for match in odds_:
                 try:
                     match_time = datetime.fromisoformat(match["commence_time"].replace("Z", "+00:00"))
                     
