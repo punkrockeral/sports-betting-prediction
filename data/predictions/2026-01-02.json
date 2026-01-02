@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-01-02T19:02:41.903126Z",
+  "generated_at": "2026-01-02T19:08:15.948608Z",
   "date": "2026-01-02",
   "model_used": "xgb_model.pkl",
   "predictions": [
@@ -10,7 +10,7 @@
       "match_date": "2026-01-02T20:00:00Z",
       "home_odds": 2.1,
       "draw_odds": 2.91,
-      "away_odds": 4.78,
+      "away_odds": 4.77,
       "predicted_outcome": "HOME",
       "expected_value": 1.0950000286102295,
       "prob_home": 0.9980000257492065,
