@@ -1,35 +1,35 @@
 {
-  "generated_at": "2026-01-02T17:51:45.885180Z",
+  "generated_at": "2026-01-02T18:57:39.108850Z",
   "date": "2026-01-02",
   "model_used": "xgb_model.pkl",
   "predictions": [
     {
       "match_id": "sim_1",
-      "home_team": "Manchester City",
-      "away_team": "Chelsea",
+      "home_team": "Chelsea",
+      "away_team": "Tottenham",
       "match_date": "2026-01-02T19:00:00Z",
-      "home_odds": 2.45,
-      "draw_odds": 3.44,
-      "away_odds": 3.45,
+      "home_odds": 1.91,
+      "draw_odds": 3.84,
+      "away_odds": 3.89,
       "predicted_outcome": "HOME",
-      "expected_value": 1.4359999895095825,
-      "prob_home": 0.9940000176429749,
-      "prob_draw": 0.004000000189989805,
-      "prob_away": 0.0020000000949949026
+      "expected_value": 0.9079999923706055,
+      "prob_home": 0.9990000128746033,
+      "prob_draw": 0.0010000000474974513,
+      "prob_away": 0.0010000000474974513
     },
     {
       "match_id": "sim_2",
-      "home_team": "Manchester United",
-      "away_team": "Chelsea",
+      "home_team": "Manchester City",
+      "away_team": "Aston Villa",
       "match_date": "2026-01-02T19:00:00Z",
-      "home_odds": 2.36,
-      "draw_odds": 3.28,
-      "away_odds": 4.21,
+      "home_odds": 2.18,
+      "draw_odds": 3.47,
+      "away_odds": 2.82,
       "predicted_outcome": "HOME",
-      "expected_value": 1.3559999465942383,
-      "prob_home": 0.9980000257492065,
-      "prob_draw": 0.0010000000474974513,
-      "prob_away": 0.0010000000474974513
+      "expected_value": 1.1699999570846558,
+      "prob_home": 0.9959999918937683,
+      "prob_draw": 0.003000000026077032,
+      "prob_away": 0.0020000000949949026
     }
   ]
 }
