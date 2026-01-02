@@ -1,10 +1,10 @@
 # scripts/fetch_and_predict.py
 """
 Sistema de predicción diaria con:
-- Datos reales de The Odds API
-- Estadísticas históricas REALES de cada equipo (desde football_matches_with_odds.csv)
-- Modelo XGBoost entrenado SOLO con estadísticas históricas
-- Cálculo de valor esperado (EV) creíble
+- Datos reales de The Odds API (solo partidos FUTUROS)
+- Estadísticas históricas REALES de cada equipo
+- Modelo XGBoost regularizado
+- Cálculo de EV creíble
 - Alertas por Telegram
 """
 
@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 import joblib
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 def load_model():
     """Carga el modelo XGBoost entrenado."""
@@ -27,7 +27,9 @@ def get_team_stats_from_historical_data(team_name, historical_df, n_last=5):
     """
     Calcula estadísticas reales de un equipo usando el dataset histórico.
     """
-    # Filtrar partidos recientes del equipo
+    if historical_df.empty:
+        return {'goals_avg': 1.2, 'conceded_avg': 1.3, 'win_rate': 0.4}
+    
     home_matches = historical_df[historical_df['HomeTeam'] == team_name].tail(n_last)
     away_matches = historical_df[historical_df['AwayTeam'] == team_name].tail(n_last)
     
@@ -36,7 +38,6 @@ def get_team_stats_from_historical_data(team_name, historical_df, n_last=5):
     wins = 0
     total_matches = 0
     
-    # Como local
     for _, row in home_matches.iterrows():
         goals_scored += row['FTHG']
         goals_conceded += row['FTAG']
@@ -44,7 +45,6 @@ def get_team_stats_from_historical_data(team_name, historical_df, n_last=5):
             wins += 1
         total_matches += 1
     
-    # Como visitante
     for _, row in away_matches.iterrows():
         goals_scored += row['FTAG']
         goals_conceded += row['FTHG']
@@ -53,12 +53,7 @@ def get_team_stats_from_historical_data(team_name, historical_df, n_last=5):
         total_matches += 1
     
     if total_matches == 0:
-        # Valores por defecto si no hay historial
-        return {
-            'goals_avg': 1.2,
-            'conceded_avg': 1.3,
-            'win_rate': 0.4
-        }
+        return {'goals_avg': 1.2, 'conceded_avg': 1.3, 'win_rate': 0.4}
     
     return {
         'goals_avg': round(goals_scored / total_matches, 3),
@@ -96,7 +91,7 @@ def send_telegram_alert(predictions):
         print(f"⚠️  Error al enviar alerta: {e}")
 
 def get_real_matches(historical_df):
-    """Obtiene partidos y cuotas reales de The Odds API."""
+    """Obtiene partidos y cuotas reales de The Odds API (solo partidos futuros)."""
     api_key = os.getenv("ODDS_API_KEY")
     if not api_key:
         print("⚠️  ODDS_API_KEY no configurada. Usando datos simulados.")
@@ -105,6 +100,7 @@ def get_real_matches(historical_df):
     sports = ["soccer_epl", "soccer_spain_la_liga", "soccer_germany_bundesliga"]
     all_matches = []
     today = datetime.now(timezone.utc).date()
+    now = datetime.now(timezone.utc)
     
     for sport in sports:
         try:
@@ -123,12 +119,22 @@ def get_real_matches(historical_df):
                 continue
             
             odds_data = resp.json()
-            for match in odds_data:
+            for match in odds_
                 try:
+                    # ✅ Parsear fecha del partido
                     match_time = datetime.fromisoformat(match["commence_time"].replace("Z", "+00:00"))
+                    
+                    # ✅ FILTRO CLAVE: Ignorar partidos que ya comenzaron o son muy lejanos
+                    if match_time <= now:
+                        continue  # Ya comenzó o terminó
+                    if match_time > now + timedelta(hours=24):
+                        continue  # Más allá de 24h
+                    
+                    # Solo procesar si es hoy
                     if match_time.date() != today:
                         continue
                     
+                    # Extraer cuotas
                     home_odds = away_odds = draw_odds = None
                     for bookmaker in match.get("bookmakers", []):
                         if bookmaker["key"] in ["pinnacle", "bet365"]:
@@ -146,7 +152,6 @@ def get_real_matches(historical_df):
                                 break
                     
                     if home_odds and away_odds and draw_odds:
-                        # ✅ Calcular estadísticas REALES del historial
                         home_stats = get_team_stats_from_historical_data(match["home_team"], historical_df)
                         away_stats = get_team_stats_from_historical_data(match["away_team"], historical_df)
                         
@@ -172,7 +177,7 @@ def get_real_matches(historical_df):
             print(f"⚠️  Error al procesar {sport}: {e}")
     
     if not all_matches:
-        print("ℹ️  No hay partidos hoy en las APIs. Usando datos simulados.")
+        print("ℹ️  No hay partidos válidos para hoy. Usando datos simulados.")
         return simulate_matches()
     
     return all_matches
@@ -198,10 +203,7 @@ def simulate_matches():
     }]
 
 def predict_match(model, match_features):
-    """
-    Predice probabilidades usando el modelo XGBoost.
-    🔑 SOLO usa las 6 features históricas (sin cuotas).
-    """
+    """Predice probabilidades usando el modelo XGBoost (solo 6 features)."""
     X = np.array([[
         match_features['home_goals_avg'],
         match_features['home_conceded_avg'],
@@ -218,7 +220,6 @@ def predict_match(model, match_features):
         probabilities = [0, 0, 0]
         probabilities[pred] = 1.0
     
-    # Normalizar
     total = sum(probabilities)
     if total > 0:
         probabilities = [p / total for p in probabilities]
@@ -232,7 +233,7 @@ def calculate_ev(probability, odds):
 def main():
     print("🎯 Iniciando sistema de predicción diaria...")
     
-    # ✅ Cargar datos históricos
+    # Cargar datos históricos
     historical_path = "data/processed/football_matches_with_odds.csv"
     if not os.path.exists(historical_path):
         print(f"❌ Advertencia: {historical_path} no encontrado. Usando stats por defecto.")
@@ -240,7 +241,6 @@ def main():
     else:
         print("📊 Cargando datos históricos...")
         historical_df = pd.read_csv(historical_path)
-        # Convertir fecha
         try:
             historical_df['Date'] = pd.to_datetime(historical_df['Date'], format='%d/%m/%Y')
         except:
@@ -255,7 +255,6 @@ def main():
     
     predictions = []
     for match in matches:
-        # ✅ Extraer solo las 6 features históricas para el modelo
         features_for_model = {
             'home_goals_avg': match['home_goals_avg'],
             'home_conceded_avg': match['home_conceded_avg'],
@@ -268,7 +267,6 @@ def main():
         probs = predict_match(model, features_for_model)
         prob_home, prob_draw, prob_away = probs
         
-        # ✅ Usar cuotas reales SOLO para calcular EV
         ev_home = calculate_ev(prob_home, match['home_odds'])
         ev_draw = calculate_ev(prob_draw, match['draw_odds'])
         ev_away = calculate_ev(prob_away, match['away_odds'])
