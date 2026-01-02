@@ -123,7 +123,7 @@ def get_real_matches(historical_df):
                 continue
             
             odds_data = resp.json()
-            for match in odds_
+            for match in odds_data:
                 try:
                     match_time = datetime.fromisoformat(match["commence_time"].replace("Z", "+00:00"))
                     if match_time.date() != today:
