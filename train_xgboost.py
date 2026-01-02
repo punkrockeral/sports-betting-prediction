@@ -15,8 +15,8 @@ def train_model():
     df = pd.read_csv(input_path)
     print(f"📥 Cargados {len(df)} partidos para entrenamiento.")
     
+    # ✅ Features SIN cuotas (solo estadísticas históricas)
     feature_cols = [
-        'B365H', 'B365D', 'B365A',
         'home_goals_avg', 'home_conceded_avg', 'home_win_rate',
         'away_goals_avg', 'away_conceded_avg', 'away_win_rate'
     ]
@@ -27,7 +27,7 @@ def train_model():
     print(f"📊 Features utilizadas: {feature_cols}")
     
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=4, stratify=y
+        X, y, test_size=0.2, random_state=42, stratify=y
     )
     
     print("🚀 Entrenando modelo XGBoost...")

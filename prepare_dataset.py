@@ -91,8 +91,9 @@ def prepare_features(input_csv, output_csv):
     )
     
     print("📊 Creando conjunto final de features...")
+    # ✅ CORRECCIÓN: NO incluir cuotas en las features de entrenamiento
     features = pd.concat([
-        df[['Date', 'HomeTeam', 'AwayTeam', 'FTR', 'B365H', 'B365D', 'B365A']],
+        df[['Date', 'HomeTeam', 'AwayTeam', 'FTR']],  # ← Sin B365H, B365D, B365A
         home_feat,
         away_feat
     ], axis=1)
