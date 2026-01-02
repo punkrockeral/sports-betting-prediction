@@ -1,0 +1,39 @@
+name: Daily Prediction
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - run: pip install -r requirements.txt
+
+      - name: Run prediction
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}  # 🔑 ¡Esta línea es clave!
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python scripts/fetch_and_predict.py
+
+      - name: Commit predictions
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/predictions/
+          if ! git diff --staged --quiet; then
+            git commit -m "Auto: Predicciones del $(date -u +%Y-%m-%d)"
+            git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/punkrockeral/sports-betting-prediction.git
+            git push
+          fi
