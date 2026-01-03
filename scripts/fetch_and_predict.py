@@ -1,11 +1,10 @@
 # scripts/fetch_and_predict.py
 """
 Sistema de predicción diaria con:
-- Datos reales de The Odds API (solo partidos FUTUROS)
-- Estadísticas históricas REALES de cada equipo
-- Modelo XGBoost regularizado
-- Cálculo de EV creíble
-- Alertas por Telegram
+- Ligas activas en enero (Argentina, Brasil, NBA, etc.)
+- Soporte para deportes sin empate (NBA)
+- Datos históricos reales
+- EV creíble y alertas por Telegram
 """
 
 import os
@@ -94,7 +93,7 @@ def send_telegram_alert(predictions):
         print(f"❌ TELEGRAM: Error: {e}")
 
 def get_real_matches(historical_df):
-    """Obtiene partidos reales de múltiples ligas (activas en enero)."""
+    """Obtiene partidos de ligas activas en enero 2026."""
     api_key = os.getenv("ODDS_API_KEY")
     print(f"🔍 ODDS_API_KEY configurada: {'Sí' if api_key else 'No'}")
     
@@ -102,31 +101,31 @@ def get_real_matches(historical_df):
         print("⚠️  API KEY no configurada. Usando datos simulados.")
         return simulate_matches()
     
-    # Ligas activas en enero
+    # ✅ LIGAS ACTIVAS EN ENERO 2026
     sports = [
-        "soccer_england_championship",     # Activo en enero
-        "soccer_argentina_primera_division",  # Temporada de verano
-        "soccer_brazil_campeonato",        # Temporada de verano
-        "basketball_nba",                  # Temporada regular
-        "soccer_epl",                      # Puede tener partidos
-        "soccer_spain_la_liga"             # Puede tener partidos
+        "soccer_argentina_primera_division",   # Temporada de verano
+        "soccer_brazil_campeonato",           # Brasileirão o estatales
+        "soccer_australia_a_league",          # Temporada de verano
+        "soccer_mexico_ligamx",               # Temporada de invierno (Clausura)
+        "basketball_nba",                     # Temporada regular
+        "basketball_euroleague"               # Temporada regular
     ]
     
     all_matches = []
     today = datetime.now(timezone.utc).date()
     now = datetime.now(timezone.utc)
     
-    print(f"📡 Consultando {len(sports)} ligas/deportes...")
+    print(f"📡 Consultando {len(sports)} ligas activas en enero...")
     
     for sport in sports:
         try:
             url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds"
             params = {
                 "apiKey": api_key,
-                "regions": "eu",
+                "regions": "eu,us",
                 "markets": "h2h",
                 "oddsFormat": "decimal",
-                "bookmakers": "pinnacle,bet365"
+                "bookmakers": "pinnacle,draftkings,fanduel"
             }
             resp = requests.get(url, params=params, timeout=10)
             
@@ -137,7 +136,7 @@ def get_real_matches(historical_df):
             odds_data = resp.json()
             print(f"✅ {sport}: {len(odds_data)} partidos")
             
-            # ✅ CORRECCIÓN DEFINITIVA: odds_data (no odds_) + :
+            # ✅ CORRECCIÓN DEFINITIVA: Sintaxis válida
             for match in odds_:
                 try:
                     match_time = datetime.fromisoformat(match["commence_time"].replace("Z", "+00:00"))
@@ -146,29 +145,29 @@ def get_real_matches(historical_df):
                     
                     home_odds = away_odds = draw_odds = None
                     for bookmaker in match.get("bookmakers", []):
-                        if bookmaker["key"] in ["pinnacle", "bet365"]:
-                            for market in bookmaker.get("markets", []):
-                                if market["key"] == "h2h":
-                                    outcomes = market["outcomes"]
-                                    if len(outcomes) == 3:
-                                        home_odds = outcomes[0]["price"]
-                                        away_odds = outcomes[1]["price"]
+                        for market in bookmaker.get("markets", []):
+                            if market["key"] == "h2h":
+                                outcomes = market["outcomes"]
+                                if len(outcomes) >= 2:
+                                    home_odds = outcomes[0]["price"]
+                                    away_odds = outcomes[1]["price"]
+                                    if len(outcomes) >= 3:
                                         draw_odds = outcomes[2]["price"]
-                                    elif len(outcomes) == 2:
-                                        home_odds = outcomes[0]["price"]
-                                        away_odds = outcomes[1]["price"]
-                                        draw_odds = None
-                                    break
-                            if home_odds and away_odds:
                                 break
+                        if home_odds and away_odds:
+                            break
                     
                     if not (home_odds and away_odds):
                         continue
                     
-                    if sport.startswith("soccer_"):
+                    # Determinar si es fútbol o no
+                    is_soccer = sport.startswith("soccer_")
+                    
+                    if is_soccer:
                         home_stats = get_team_stats_from_historical_data(match["home_team"], historical_df)
                         away_stats = get_team_stats_from_historical_data(match["away_team"], historical_df)
                     else:
+                        # Deportes no fútbol: usar valores por defecto
                         home_stats = {'goals_avg': 1.2, 'conceded_avg': 1.3, 'win_rate': 0.5}
                         away_stats = {'goals_avg': 1.1, 'conceded_avg': 1.4, 'win_rate': 0.4}
                     
@@ -179,6 +178,7 @@ def get_real_matches(historical_df):
                         "match_date": match["commence_time"],
                         "home_odds": float(home_odds),
                         "away_odds": float(away_odds),
+                        "has_draw": is_soccer,  # ⚠️ Clave para manejar empate
                         "home_goals_avg": home_stats["goals_avg"],
                         "home_conceded_avg": home_stats["conceded_avg"],
                         "home_win_rate": home_stats["win_rate"],
@@ -186,7 +186,9 @@ def get_real_matches(historical_df):
                         "away_conceded_avg": away_stats["conceded_avg"],
                         "away_win_rate": away_stats["win_rate"]
                     }
-                    match_entry["draw_odds"] = float(draw_odds) if draw_odds else 3.0
+                    if is_soccer:
+                        match_entry["draw_odds"] = float(draw_odds) if draw_odds else 3.0
+                    
                     all_matches.append(match_entry)
                     
                 except KeyError as e:
@@ -196,7 +198,7 @@ def get_real_matches(historical_df):
             print(f"⚠️  {sport}: Error: {e}")
     
     if not all_matches:
-        print("ℹ️  No hay partidos reales. Usando simulados.")
+        print("ℹ️  No hay partidos reales en ligas activas. Usando simulados.")
         return simulate_matches()
     
     print(f"🎯 Partidos válidos: {len(all_matches)}")
@@ -213,6 +215,7 @@ def simulate_matches():
         "home_odds": 2.10,
         "draw_odds": 3.40,
         "away_odds": 3.20,
+        "has_draw": True,
         "home_goals_avg": 1.4,
         "home_conceded_avg": 1.1,
         "home_win_rate": 0.6,
@@ -249,7 +252,7 @@ def calculate_ev(probability, odds):
     return (probability * odds) - 1
 
 def main():
-    print("🎯 Iniciando sistema de predicción diaria...")
+    print("🎯 Iniciando sistema de predicción diaria (enero 2026)...")
     
     historical_path = "data/processed/football_matches_with_odds.csv"
     if not os.path.exists(historical_path):
@@ -284,12 +287,19 @@ def main():
         probs = predict_match(model, features)
         prob_home, prob_draw, prob_away = probs
         
-        draw_odds = match.get('draw_odds', 3.0)
-        ev_home = calculate_ev(prob_home, match['home_odds'])
-        ev_draw = calculate_ev(prob_draw, draw_odds)
-        ev_away = calculate_ev(prob_away, match['away_odds'])
+        # ⚠️ Manejo de deportes sin empate
+        if match.get("has_draw", False):
+            draw_odds = match.get('draw_odds', 3.0)
+            ev_home = calculate_ev(prob_home, match['home_odds'])
+            ev_draw = calculate_ev(prob_draw, draw_odds)
+            ev_away = calculate_ev(prob_away, match['away_odds'])
+            evs = {'HOME': ev_home, 'DRAW': ev_draw, 'AWAY': ev_away}
+        else:
+            # Sin empate: solo HOME y AWAY
+            ev_home = calculate_ev(prob_home, match['home_odds'])
+            ev_away = calculate_ev(prob_away, match['away_odds'])
+            evs = {'HOME': ev_home, 'AWAY': ev_away}
         
-        evs = {'HOME': ev_home, 'DRAW': ev_draw, 'AWAY': ev_away}
         best_outcome = max(evs, key=evs.get)
         best_ev = evs[best_outcome]
         
@@ -299,12 +309,12 @@ def main():
             "away_team": match["away_team"],
             "match_date": match["match_date"],
             "home_odds": float(match["home_odds"]),
-            "draw_odds": float(draw_odds),
+            "draw_odds": float(match.get("draw_odds", 3.0)),
             "away_odds": float(match["away_odds"]),
             "predicted_outcome": best_outcome,
             "expected_value": float(round(best_ev, 3)),
             "prob_home": float(round(prob_home, 3)),
-            "prob_draw": float(round(prob_draw, 3)),
+            "prob_draw": float(round(prob_draw, 3)) if match.get("has_draw", False) else 0.0,
             "prob_away": float(round(prob_away, 3))
         })
         print(f"  → {match['home_team']} vs {match['away_team']}: {best_outcome} (EV: {best_ev:.2%})")
