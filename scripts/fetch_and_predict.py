@@ -140,7 +140,7 @@ def get_real_matches(historical_df):
             for match in odds_:
                 try:
                     match_time = datetime.fromisoformat(match["commence_time"].replace("Z", "+00:00"))
-                    if match_time <= now or match_time.date() != today:
+                    if match_time.date() not in [today, today + timedelta(days=1)]:
                         continue
                     
                     home_odds = away_odds = draw_odds = None
