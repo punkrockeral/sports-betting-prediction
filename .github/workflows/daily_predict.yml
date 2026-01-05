@@ -19,26 +19,28 @@ jobs:
       
       - run: pip install -r requirements.txt
 
-      # 🔁 PASO 1: Descargar datos históricos
+      # 🔁 PASO 1: Descargar datos históricos desde API-Football
       - name: Download historical data
+        env:
+          RAPID_API_KEY: ${{ secrets.RAPID_API_KEY }}
         run: python scripts/download_historical_data.py
 
-      # 🔁 PASO 2: Combinar datos
-      - name: Combine historical data
-        run: python scripts/combine_historical_data.py
+      # ❌ ELIMINAR: Ya no se necesita combinar datos
+      # - name: Combine historical data
+      #   run: python scripts/combine_historical_data.py
 
-      # 🔁 PASO 3: Preparar features
+      # 🔁 PASO 2: Preparar features
       - name: Prepare features
         run: python prepare_dataset.py
 
-      # 🔁 PASO 4: Reentrenar modelo
+      # 🔁 PASO 3: Reentrenar modelo
       - name: Retrain model
         run: python train_xgboost.py
 
-      # 🔮 PASO 5: Generar predicciones
+      # 🔮 PASO 4: Generar predicciones
       - name: Run prediction
         env:
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          RAPID_API_KEY: ${{ secrets.RAPID_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scripts/fetch_and_predict.py

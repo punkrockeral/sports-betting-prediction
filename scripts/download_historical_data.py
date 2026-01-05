@@ -1,85 +1,169 @@
 # scripts/download_historical_data.py
 """
-Descarga datos históricos de football-data.co.uk para múltiples ligas y temporadas.
-Funciona en GitHub Actions (donde el sitio está accesible).
+Descarga datos históricos desde API-Football (API-Sports)
+- Ligas: Argentina, Brasil, Inglaterra, España, etc.
+- Temporadas: 2023, 2024, 2025
+- Incluye cuotas de Bet365
 """
 
-import pandas as pd
 import os
-import time
+import pandas as pd
 import requests
 from datetime import datetime
 
-def download_with_retry(url, max_retries=3, delay=2):
-    """Descarga un CSV con reintentos en caso de fallo."""
-    for attempt in range(max_retries):
+def download_season(league_id, league_name, season, api_key):
+    """
+    Descarga una temporada completa desde API-Football.
+    """
+    all_fixtures = []
+    page = 1
+    total_pages = 1
+    
+    while page <= total_pages:
         try:
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
+            url = "https://v3.football.api-sports.io/fixtures"
+            headers = {"x-apisports-key": api_key}
+            params = {
+                "league": league_id,
+                "season": season,
+                "status": "FT",  # Solo partidos finalizados
+                "page": page
+            }
             
-            # Verificar que el contenido sea CSV (no página de error)
-            if response.headers.get('content-type', '').startswith('text/csv') or \
-               (response.text and 'Date,HomeTeam' in response.text[:100]):
-                return pd.read_csv(url)
-            else:
-                print(f"⚠️  Contenido no CSV en {url} (intentos: {attempt + 1})")
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            if response.status_code != 200:
+                print(f"⚠️  Error HTTP {response.status_code} en {league_name} {season} (página {page})")
+                break
+            
+            data = response.json()
+            fixtures = data.get("response", [])
+            if not fixtures:
+                break
+            
+            all_fixtures.extend(fixtures)
+            
+            # Manejo de paginación
+            total_pages = data.get("paging", {}).get("total", 1)
+            print(f"  → {league_name} {season}: página {page}/{total_pages} ({len(fixtures)} partidos)")
+            page += 1
+            
         except Exception as e:
-            print(f"⚠️  Intento {attempt + 1} fallido para {url}: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(delay)
+            print(f"⚠️  Error en {league_name} {season} (página {page}): {e}")
+            break
     
-    return None
-
-def download_league(league_code, season, output_dir="data/raw"):
-    """Descarga una temporada específica de una liga."""
-    url = f"https://www.football-data.co.uk/mmz4281/{season}/{league_code}.csv"
-    output_path = os.path.join(output_dir, f"{league_code}_{season}.csv")
+    # Procesar partidos
+    processed = []
+    for fixture in all_fixtures:
+        try:
+            # Fecha
+            date = fixture["fixture"]["date"].split("T")[0]
+            
+            # Equipos
+            home_team = fixture["teams"]["home"]["name"]
+            away_team = fixture["teams"]["away"]["name"]
+            
+            # Resultado
+            home_goals = fixture["goals"]["home"]
+            away_goals = fixture["goals"]["away"]
+            
+            if home_goals is None or away_goals is None:
+                continue
+            
+            # Resultado final (FTR)
+            if home_goals > away_goals:
+                ftr = "H"
+            elif home_goals < away_goals:
+                ftr = "A"
+            else:
+                ftr = "D"
+            
+            # Cuotas (Bet365)
+            b365h = b365d = b365a = None
+            if "bookmakers" in fixture:
+                for bookmaker in fixture["bookmakers"]:
+                    if bookmaker["name"] == "Bet365":
+                        for bet in bookmaker["bets"]:
+                            if bet["name"] == "Match Winner":
+                                for value in bet["values"]:
+                                    if value["value"] == "Home":
+                                        b365h = float(value["odd"])
+                                    elif value["value"] == "Draw":
+                                        b365d = float(value["odd"])
+                                    elif value["value"] == "Away":
+                                        b365a = float(value["odd"])
+                                break
+                        break
+            
+            # Solo incluir si hay resultado y (cuotas o es reciente)
+            if b365h is None:
+                # Para temporadas recientes sin cuotas, usar valores por defecto
+                if season >= 2024:
+                    b365h, b365d, b365a = 2.0, 3.0, 3.5
+                else:
+                    continue  # Saltar si no hay cuotas y es histórico
+            
+            processed.append({
+                "Date": date,
+                "HomeTeam": home_team,
+                "AwayTeam": away_team,
+                "FTHG": home_goals,
+                "FTAG": away_goals,
+                "FTR": ftr,
+                "B365H": b365h,
+                "B365D": b365d,
+                "B365A": b365a
+            })
+        except Exception as e:
+            continue  # Saltar partidos con datos faltantes
     
-    # Saltar si ya existe (útil para desarrollo local)
-    if os.path.exists(output_path):
-        print(f"⏭️  Ya existe: {output_path}")
-        return True
-    
-    os.makedirs(output_dir, exist_ok=True)
-    df = download_with_retry(url)
-    
-    if df is not None:
-        # Guardar solo columnas necesarias para ahorrar espacio
-        required_cols = ['Date', 'HomeTeam', 'AwayTeam', 'FTHG', 'FTAG', 'FTR', 'B365H', 'B365D', 'B365A']
-        available_cols = [col for col in required_cols if col in df.columns]
-        df[available_cols].to_csv(output_path, index=False)
-        print(f"✅ Descargado: {league_code} {season} → {len(df)} partidos")
-        return True
-    else:
-        print(f"❌ Falló la descarga de {league_code} {season}")
-        return False
+    print(f"✅ {league_name} {season}: {len(processed)} partidos procesados")
+    return processed
 
 def main():
-    # 🔥 Configuración: Ligas y temporadas (ajustable)
-    config = {
-        # Liga, Código, Temporadas
-        "Premier League": ("E0", ["2324", "2223", "2122", "2021"]),
-        "La Liga": ("SP1", ["2324", "2223", "2122"]),
-        "Bundesliga": ("D1", ["2324", "2223"]),
-        "Serie A": ("I1", ["2324", "2223"]),
-        "Ligue 1": ("F1", ["2324", "2223"]),
-        "Eredivisie": ("N1", ["2324", "2223"]),
-        "Primeira Liga": ("P1", ["2324", "2223"]),
-        "Championship": ("E1", ["2324", "2223"])
+    # 🔑 Tu clave de API-Football
+    api_key = os.getenv("RAPID_API_KEY")
+    if not api_key:
+        raise EnvironmentError("❌ RAPID_API_KEY no configurada en las variables de entorno.")
+    
+    # 🌎 Ligas y temporadas a descargar
+    leagues = {
+        128: "Argentina Primera División",
+        71: "Brasileirão",
+        39: "Premier League",
+        140: "La Liga",
+        78: "Bundesliga",
+        135: "Serie A",
+        61: "Ligue 1"
     }
+    seasons = [2023, 2024, 2025]  # Ajusta según necesites
     
-    total_downloaded = 0
-    start_time = datetime.now()
+    all_data = []
     
-    for league_name, (code, seasons) in config.items():
-        print(f"\n🔄 Procesando {league_name} ({code})...")
+    for league_id, league_name in leagues.items():
+        print(f"\n🔄 Descargando {league_name}...")
         for season in seasons:
-            if download_league(code, season):
-                total_downloaded += 1
+            fixtures = download_season(league_id, league_name, season, api_key)
+            all_data.extend(fixtures)
     
-    elapsed = datetime.now() - start_time
-    print(f"\n🏁 Descarga completada en {elapsed.total_seconds():.1f} segundos")
-    print(f"📊 Archivos descargados: {total_downloaded}")
+    if not all_data:
+        raise ValueError("❌ No se descargaron datos válidos.")
+    
+    # Guardar en CSV
+    df = pd.DataFrame(all_data)
+    df = df.sort_values("Date").reset_index(drop=True)
+    
+    os.makedirs("data/raw", exist_ok=True)
+    output_path = "data/raw/api_football_historical.csv"
+    df.to_csv(output_path, index=False)
+    
+    print(f"\n🏁 Total de partidos descargados: {len(df)}")
+    print(f"📅 Rango de fechas: {df['Date'].min()} → {df['Date'].max()}")
+    print(f"💾 Datos guardados en: {output_path}")
+    
+    # Crear enlace simbólico para compatibilidad con tu sistema actual
+    processed_path = "data/processed/football_matches_with_odds.csv"
+    df.to_csv(processed_path, index=False)
+    print(f"🔗 Compatibilidad: {processed_path}")
 
 if __name__ == "__main__":
     main()
