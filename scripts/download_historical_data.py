@@ -1,9 +1,10 @@
 # scripts/download_historical_data.py
 """
-Descarga datos históricos desde API-Football (API-Sports)
+Descarga datos históricos desde API-Football vía RapidAPI
 - Ligas: Argentina, Brasil, Inglaterra, España, etc.
 - Temporadas: 2023, 2024, 2025
 - Incluye cuotas de Bet365
+- Usa headers de RapidAPI
 """
 
 import os
@@ -13,16 +14,21 @@ from datetime import datetime
 
 def download_season(league_id, league_name, season, api_key):
     """
-    Descarga una temporada completa desde API-Football.
+    Descarga una temporada completa desde API-Football (vía RapidAPI).
     """
     all_fixtures = []
     page = 1
     total_pages = 1
     
+    # ✅ Headers CORRECTOS para RapidAPI
+    headers = {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": "v3.football.api-sports.io"
+    }
+    
     while page <= total_pages:
         try:
             url = "https://v3.football.api-sports.io/fixtures"
-            headers = {"x-apisports-key": api_key}
             params = {
                 "league": league_id,
                 "season": season,
@@ -31,7 +37,11 @@ def download_season(league_id, league_name, season, api_key):
             }
             
             response = requests.get(url, headers=headers, params=params, timeout=15)
-            if response.status_code != 200:
+            
+            if response.status_code == 429:
+                print(f"⚠️  Límite de tasa excedido en {league_name} {season}")
+                break
+            elif response.status_code != 200:
                 print(f"⚠️  Error HTTP {response.status_code} en {league_name} {season} (página {page})")
                 break
             
@@ -40,11 +50,11 @@ def download_season(league_id, league_name, season, api_key):
             if not fixtures:
                 break
             
-            all_fixtures.extend(fixtures)
-            
             # Manejo de paginación
             total_pages = data.get("paging", {}).get("total", 1)
             print(f"  → {league_name} {season}: página {page}/{total_pages} ({len(fixtures)} partidos)")
+            
+            all_fixtures.extend(fixtures)
             page += 1
             
         except Exception as e:
@@ -94,13 +104,12 @@ def download_season(league_id, league_name, season, api_key):
                                 break
                         break
             
-            # Solo incluir si hay resultado y (cuotas o es reciente)
+            # Incluir partidos incluso si no tienen cuotas (usar valores por defecto para temporadas recientes)
             if b365h is None:
-                # Para temporadas recientes sin cuotas, usar valores por defecto
                 if season >= 2024:
                     b365h, b365d, b365a = 2.0, 3.0, 3.5
                 else:
-                    continue  # Saltar si no hay cuotas y es histórico
+                    continue  # Saltar históricos sin cuotas
             
             processed.append({
                 "Date": date,
@@ -120,7 +129,7 @@ def download_season(league_id, league_name, season, api_key):
     return processed
 
 def main():
-    # 🔑 Tu clave de API-Football
+    # 🔑 Clave de RapidAPI (no la de API-Football directo)
     api_key = os.getenv("RAPID_API_KEY")
     if not api_key:
         raise EnvironmentError("❌ RAPID_API_KEY no configurada en las variables de entorno.")
@@ -135,7 +144,7 @@ def main():
         135: "Serie A",
         61: "Ligue 1"
     }
-    seasons = [2023, 2024, 2025]  # Ajusta según necesites
+    seasons = [2023, 2024, 2025]
     
     all_data = []
     
@@ -152,18 +161,13 @@ def main():
     df = pd.DataFrame(all_data)
     df = df.sort_values("Date").reset_index(drop=True)
     
-    os.makedirs("data/raw", exist_ok=True)
-    output_path = "data/raw/api_football_historical.csv"
+    os.makedirs("data/processed", exist_ok=True)
+    output_path = "data/processed/football_matches_with_odds.csv"
     df.to_csv(output_path, index=False)
     
     print(f"\n🏁 Total de partidos descargados: {len(df)}")
     print(f"📅 Rango de fechas: {df['Date'].min()} → {df['Date'].max()}")
     print(f"💾 Datos guardados en: {output_path}")
-    
-    # Crear enlace simbólico para compatibilidad con tu sistema actual
-    processed_path = "data/processed/football_matches_with_odds.csv"
-    df.to_csv(processed_path, index=False)
-    print(f"🔗 Compatibilidad: {processed_path}")
 
 if __name__ == "__main__":
     main()
