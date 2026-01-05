@@ -245,19 +245,20 @@ def main():
         best_outcome = max(evs, key=evs.get)
         best_ev = evs[best_outcome]
         
+        # ✅ Conversión explícita a float nativo (opcional pero segura)
         predictions.append({
             "match_id": match["match_id"],
             "home_team": match["home_team"],
             "away_team": match["away_team"],
             "match_date": match["match_date"],
-            "home_odds": match["home_odds"],
-            "draw_odds": match["draw_odds"],
-            "away_odds": match["away_odds"],
+            "home_odds": float(match["home_odds"]),
+            "draw_odds": float(match["draw_odds"]),
+            "away_odds": float(match["away_odds"]),
             "predicted_outcome": best_outcome,
-            "expected_value": round(best_ev, 3),
-            "prob_home": round(prob_home, 3),
-            "prob_draw": round(prob_draw, 3),
-            "prob_away": round(prob_away, 3)
+            "expected_value": float(round(best_ev, 3)),
+            "prob_home": float(round(prob_home, 3)),
+            "prob_draw": float(round(prob_draw, 3)),
+            "prob_away": float(round(prob_away, 3))
         })
         print(f"  → {match['home_team']} vs {match['away_team']}: {best_outcome} (EV: {best_ev:.2%})")
     
@@ -266,13 +267,23 @@ def main():
     os.makedirs("data/predictions", exist_ok=True)
     output_path = f"data/predictions/{today}.json"
     
+    # ✅ Serializador seguro para NumPy
+    def numpy_converter(obj):
+        if isinstance(obj, (np.integer, np.int64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float32, np.float64)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
+    
     with open(output_path, "w") as f:
         json.dump({
             "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "date": today,
             "model_used": "xgb_model.pkl",
             "predictions": predictions
-        }, f, indent=2)
+        }, f, indent=2, default=numpy_converter)
     
     print(f"\n✅ Predicciones guardadas en {output_path}")
     send_telegram_alert(predictions)
