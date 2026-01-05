@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-01-03T20:30:58.526064Z",
-  "date": "2026-01-03",
+  "generated_at": "2026-01-05T06:45:17.562653Z",
+  "date": "2026-01-05",
   "model_used": "xgb_model.pkl",
   "predictions": [
     {
       "match_id": "sim_1",
       "home_team": "Team A",
       "away_team": "Team B",
-      "match_date": "2026-01-03T19:00:00Z",
+      "match_date": "2026-01-05T19:00:00Z",
       "home_odds": 2.1,
       "draw_odds": 3.4,
       "away_odds": 3.2,
