@@ -1,12 +1,12 @@
-name: Daily Prediction Only
+name: Daily Auto-Retrain & Predict
 
 on:
   schedule:
-    - cron: '0 5 * * *'
+    - cron: '0 5 * * *'  # 5 AM UTC
   workflow_dispatch:
 
 jobs:
-  predict:
+  auto_retrain:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,13 +16,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      
       - run: pip install -r requirements.txt
+
+      # 🔮 PASO: Generar predicciones
       - name: Run prediction
         env:
-  ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
-  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python scripts/fetch_and_predict.py
+
+      # 💾 Guardar resultados
       - name: Commit predictions
         run: |
           git config --global user.name "github-actions[bot]"
