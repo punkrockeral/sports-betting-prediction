@@ -1,7 +1,7 @@
 # scripts/fetch_and_predict.py
 """
 Sistema de predicción diaria usando The Odds API.
-- Partidos reales de Argentina, Brasil, NBA, etc.
+- Premier League, Champions League, Europa League, Copa del Rey
 - Cuotas en tiempo real (Pinnacle, Bet365)
 - Modelo XGBoost entrenado con datos históricos
 - Alertas por Telegram para EV > 2%
@@ -70,18 +70,18 @@ def send_telegram_alert(predictions):
         print(f"❌ Error Telegram: {e}")
 
 def fetch_real_matches():
-    """Obtiene partidos reales de The Odds API (incluye Argentina, Brasil, NBA)."""
+    """Obtiene partidos de Premier League, Champions, Europa League y Copa del Rey."""
     api_key = os.getenv("ODDS_API_KEY")
     if not api_key:
         print("⚠️  ODDS_API_KEY no configurada.")
         return []
     
-    # Deportes activos en enero
+    # ✅ COMPETICIONES SOLICITADAS
     sports = [
-        "soccer_argentina_primera_division",
-        "soccer_brazil_campeonato",
-        "soccer_australia_a_league",
-        "basketball_nba"
+        "soccer_epl",                    # Premier League
+        "soccer_uefa_champs_league",     # Champions League
+        "soccer_uefa_europa_league",     # Europa League
+        "soccer_spain_copa_del_rey"      # Copa del Rey
     ]
     
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -124,7 +124,7 @@ def fetch_real_matches():
                                         home_odds = outcomes[0]["price"]
                                         away_odds = outcomes[1]["price"]
                                         draw_odds = outcomes[2]["price"]
-                                    elif len(outcomes) == 2:  # Sin empate (NBA)
+                                    elif len(outcomes) == 2:  # Sin empate (raro en estas copas)
                                         home_odds = outcomes[0]["price"]
                                         away_odds = outcomes[1]["price"]
                                         draw_odds = 3.0
@@ -191,7 +191,7 @@ def calculate_ev(probability, odds):
     return (probability * odds) - 1
 
 def main():
-    print("🎯 Iniciando predicción con The Odds API...")
+    print("🎯 Iniciando predicción con The Odds API (Premier, UCL, UEL, Copa del Rey)...")
     
     # Cargar dataset histórico existente
     historical_path = "data/processed/football_matches_with_odds.csv"
@@ -207,7 +207,7 @@ def main():
     # Obtener partidos reales
     matches = fetch_real_matches()
     if not matches:
-        print("ℹ️  No hay partidos reales. Usando simulados.")
+        print("ℹ️  No hay partidos en competiciones europeas/hoy. Usando simulados.")
         matches = simulate_matches()
     
     # Cargar modelo y generar predicciones
