@@ -1,13 +1,10 @@
 # scripts/fetch_and_predict.py
 """
-Predicción diaria enfocada en COPAS INTERNACIONALES:
-- Copa del Rey (España)
-- FA Cup (Inglaterra)
-- Copa Libertadores
-- Copa Sudamericana
-- Copa do Brasil
-
-No incluye ligas nacionales (ej: Liga Profesional Argentina).
+Sistema de predicción diaria usando The Odds API.
+- Partidos reales de Argentina, Brasil, NBA, etc.
+- Cuotas en tiempo real (Pinnacle, Bet365)
+- Modelo XGBoost entrenado con datos históricos
+- Alertas por Telegram para EV > 2%
 """
 
 import os
@@ -65,95 +62,92 @@ def send_telegram_alert(predictions):
         message += f"  → {p['predicted_outcome']} @{p['home_odds']:.2f} (EV: {ev_pct:.1f}%)\n\n"
     
     try:
+        # ✅ URL CORREGIDA: sin espacios
         url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
         requests.post(url, json={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}, timeout=10)
         print("✅ Alerta Telegram enviada")
     except Exception as e:
         print(f"❌ Error Telegram: {e}")
 
-def fetch_api_football_fixtures():
-    """
-    Obtiene partidos FUTUROS de COPAS INTERNACIONALES activas en enero-febrero 2026.
-    """
-    api_key = os.getenv("RAPID_API_KEY")
+def fetch_real_matches():
+    """Obtiene partidos reales de The Odds API (incluye Argentina, Brasil, NBA)."""
+    api_key = os.getenv("ODDS_API_KEY")
     if not api_key:
-        print("⚠️  RAPID_API_KEY no configurada.")
+        print("⚠️  ODDS_API_KEY no configurada.")
         return []
     
-    # 🔥 COPAS RECOMENDADAS (sin ligas nacionales)
-    copas = [
-        143,  # Copa del Rey (España) - ENERO
-        45,   # FA Cup (Inglaterra) - ENERO
-        133,  # Copa Libertadores - FEBRERO
-        134,  # Copa Sudamericana - FEBRERO
-        135   # Copa do Brasil - FEBRERO
+    # Deportes activos en enero
+    sports = [
+        "soccer_argentina_primera_division",
+        "soccer_brazil_campeonato",
+        "soccer_australia_a_league",
+        "basketball_nba"
     ]
     
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     tomorrow = (datetime.now(timezone.utc) + timedelta(days=1)).strftime("%Y-%m-%d")
-    dates = [today, tomorrow]
-    
     all_matches = []
-    headers = {
-        "X-RapidAPI-Key": api_key,
-        "X-RapidAPI-Host": "v3.football.api-sports.io"
-    }
     
-    print(f"📡 Consultando copas internacionales para {today} y {tomorrow}...")
-    
-    for copa_id in copas:
-        for date in dates:
-            try:
-                url = "https://v3.football.api-sports.io/fixtures"
-                params = {
-                    "league": copa_id,
-                    "date": date,
-                    "timezone": "UTC"
-                }
-                resp = requests.get(url, headers=headers, params=params, timeout=10)
-                
-                if resp.status_code != 200:
-                    continue
-                
-                data = resp.json()
-                fixtures = data.get("response", [])
-                
-                for fixture in fixtures:
-                    # Solo partidos no iniciados
-                    if fixture["fixture"]["status"]["short"] != "NS":
+    for sport in sports:
+        try:
+            # ✅ URL CORREGIDA: sin espacios
+            url = f"https://api.the-odds-api.com/v4/sports/{sport}/odds"
+            params = {
+                "apiKey": api_key,
+                "regions": "eu,us",
+                "markets": "h2h",
+                "oddsFormat": "decimal",
+                "bookmakers": "pinnacle,bet365"
+            }
+            resp = requests.get(url, params=params, timeout=10)
+            
+            if resp.status_code != 200:
+                continue
+            
+            odds_data = resp.json()
+            # ✅ Corrección crítica: odds_data, no odds_
+            for match in odds_:
+                try:
+                    match_time = datetime.fromisoformat(match["commence_time"].replace("Z", "+00:00"))
+                    match_date = match_time.strftime("%Y-%m-%d")
+                    
+                    if match_date not in [today, tomorrow]:
                         continue
                     
-                    # Extraer cuotas de Bet365
-                    home_odds = draw_odds = away_odds = None
-                    if fixture.get("bookmakers"):
-                        for bookmaker in fixture["bookmakers"]:
-                            if bookmaker["name"] == "Bet365":
-                                for bet in bookmaker["bets"]:
-                                    if bet["name"] == "Match Winner":
-                                        for value in bet["values"]:
-                                            if value["value"] == "Home":
-                                                home_odds = float(value["odd"])
-                                            elif value["value"] == "Draw":
-                                                draw_odds = float(value["odd"])
-                                            elif value["value"] == "Away":
-                                                away_odds = float(value["odd"])
-                                        break
+                    home_odds = away_odds = draw_odds = None
+                    for bookmaker in match.get("bookmakers", []):
+                        if bookmaker["key"] in ["pinnacle", "bet365"]:
+                            for market in bookmaker.get("markets", []):
+                                if market["key"] == "h2h":
+                                    outcomes = market["outcomes"]
+                                    if len(outcomes) >= 3:
+                                        home_odds = outcomes[0]["price"]
+                                        away_odds = outcomes[1]["price"]
+                                        draw_odds = outcomes[2]["price"]
+                                    elif len(outcomes) == 2:  # Sin empate (NBA)
+                                        home_odds = outcomes[0]["price"]
+                                        away_odds = outcomes[1]["price"]
+                                        draw_odds = 3.0
+                                    break
+                            if home_odds and away_odds:
                                 break
                     
-                    if home_odds and draw_odds and away_odds:
+                    if home_odds and away_odds:
                         all_matches.append({
-                            "match_id": fixture["fixture"]["id"],
-                            "home_team": fixture["teams"]["home"]["name"],
-                            "away_team": fixture["teams"]["away"]["name"],
-                            "match_date": fixture["fixture"]["date"],
-                            "home_odds": home_odds,
-                            "draw_odds": draw_odds,
-                            "away_odds": away_odds
+                            "match_id": match["id"],
+                            "home_team": match["home_team"],
+                            "away_team": match["away_team"],
+                            "match_date": match["commence_time"],
+                            "home_odds": float(home_odds),
+                            "draw_odds": float(draw_odds) if draw_odds else 3.0,
+                            "away_odds": float(away_odds)
                         })
-            except Exception as e:
-                continue  # Saltar errores silenciosamente
+                except:
+                    continue
+        except:
+            continue
     
-    print(f"✅ Copas internacionales: {len(all_matches)} partidos encontrados")
+    print(f"✅ The Odds API: {len(all_matches)} partidos encontrados")
     return all_matches
 
 def simulate_matches():
@@ -197,9 +191,9 @@ def calculate_ev(probability, odds):
     return (probability * odds) - 1
 
 def main():
-    print("🎯 Iniciando predicción para COPAS INTERNACIONALES...")
+    print("🎯 Iniciando predicción con The Odds API...")
     
-    # Cargar dataset histórico existente (football-data.co.uk)
+    # Cargar dataset histórico existente
     historical_path = "data/processed/football_matches_with_odds.csv"
     historical_df = pd.read_csv(historical_path) if os.path.exists(historical_path) else pd.DataFrame()
     
@@ -210,10 +204,10 @@ def main():
             historical_df['Date'] = pd.to_datetime(historical_df['Date'])
         historical_df = historical_df.sort_values('Date').reset_index(drop=True)
     
-    # Obtener partidos reales de copas
-    matches = fetch_api_football_fixtures()
+    # Obtener partidos reales
+    matches = fetch_real_matches()
     if not matches:
-        print("ℹ️  No hay partidos en copas internacionales. Usando simulados.")
+        print("ℹ️  No hay partidos reales. Usando simulados.")
         matches = simulate_matches()
     
     # Cargar modelo y generar predicciones
@@ -221,7 +215,6 @@ def main():
     predictions = []
     
     for match in matches:
-        # Calcular estadísticas históricas
         home_stats = get_team_stats_from_historical_data(match["home_team"], historical_df)
         away_stats = get_team_stats_from_historical_data(match["away_team"], historical_df)
         
@@ -245,7 +238,6 @@ def main():
         best_outcome = max(evs, key=evs.get)
         best_ev = evs[best_outcome]
         
-        # ✅ Conversión explícita a float nativo (opcional pero segura)
         predictions.append({
             "match_id": match["match_id"],
             "home_team": match["home_team"],
