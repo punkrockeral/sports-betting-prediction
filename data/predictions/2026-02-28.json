@@ -1,0 +1,21 @@
+{
+  "generated_at": "2026-02-28T05:30:30.750873Z",
+  "date": "2026-02-28",
+  "model_used": "xgb_model.pkl",
+  "predictions": [
+    {
+      "match_id": "sim_1",
+      "home_team": "Team A",
+      "away_team": "Team B",
+      "match_date": "2026-02-28T19:00:00Z",
+      "home_odds": 2.1,
+      "draw_odds": 3.4,
+      "away_odds": 3.2,
+      "predicted_outcome": "AWAY",
+      "expected_value": -0.00800000037997961,
+      "prob_home": 0.4050000011920929,
+      "prob_draw": 0.2849999964237213,
+      "prob_away": 0.3100000023841858
+    }
+  ]
+}
